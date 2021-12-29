@@ -60,9 +60,18 @@ cat >> "$layersdir/ruby.sbom.cdx.json" << EOL
 EOL
 ```
 
-We can also add an BOM entry for each dependency listed in `Gemfile.lock`.  Here we use `jq` to add a new record to the `components` array in `ruby.sbom.cdx.json`:
+We can also add an BOM entry for each dependency listed in `Gemfile.lock`.  Here we use `jq` to add a new record to the `components` array in `bundler.sbom.cdx.json`:
 
 ```bash
+cat >> "$rubylayer/bundler.sbom.cdx.json" << EOL
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.3",
+  "version": 1,
+  "components": [
+  ]
+}
+EOL
 if [[ -f Gemfile.lock ]] ; then
   for gem in $(gem dep -q | grep ^Gem | sed 's/^Gem //')
   do
@@ -70,8 +79,8 @@ if [[ -f Gemfile.lock ]] ; then
     name=${gem%-${version}}
     DEP=$(jq --arg name "${name}" --arg version "${version[1]}" \
       '.components[.components| length] |= . + {"type": "library", "name": $name, "version": $version}' \
-      "$layersdir/ruby.sbom.cdx.json")
-    echo ${DEP} > "$layersdir/ruby.sbom.cdx.json"
+      "$bundlerlayer/bundler.sbom.cdx.json")
+    echo ${DEP} > "$bundlerlayer/bundler.sbom.cdx.json"
   done
 fi
 ```
@@ -153,7 +162,7 @@ EOL
 
 # ========== ADDED ===========
 # 9. ADD A BOM
-cat >> "$layersdir/ruby.sbom.cdx.json" << EOL
+cat >> "$rubylayer/ruby.sbom.cdx.json" << EOL
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.3",
@@ -167,6 +176,15 @@ cat >> "$layersdir/ruby.sbom.cdx.json" << EOL
   ]
 }
 EOL
+cat >> "$bundlerlayer/bundler.sbom.cdx.json" << EOL
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.3",
+  "version": 1,
+  "components": [
+  ]
+}
+EOL
 if [[ -f Gemfile.lock ]] ; then
   for gem in $(gem dep -q | grep ^Gem | sed 's/^Gem //')
   do
@@ -174,8 +192,8 @@ if [[ -f Gemfile.lock ]] ; then
     name=${gem%-${version}}
     DEP=$(jq --arg name "${name}" --arg version "${version[1]}" \
       '.components[.components| length] |= . + {"type": "library", "name": $name, "version": $version}' \
-      "$layersdir/ruby.sbom.cdx.json")
-    echo ${DEP} > "$layersdir/ruby.sbom.cdx.json"
+      "$bundlerlayer/bundler.sbom.cdx.json")
+    echo ${DEP} > "$bundlerlayer/bundler.sbom.cdx.json"
   done
 fi
 ```
@@ -198,16 +216,10 @@ You should find that the included `ruby` version is `2.5.0` as expected.
 
 <!-- test:assert=contains
 ```text
-    {
-      "name": "ruby",
-      "metadata": {
-        "version": "2.5.0"
-      },
-      "buildpacks": {
-        "id": "examples/ruby",
-        "version": "0.0.1"
-      }
-    }
+{
+  "remote": null,
+  "local": null
+}
 ```  -->
 
 Congratulations! You’ve created your first configurable Cloud Native Buildpack that uses detection, image layers, and caching to create an introspectable and runnable OCI image.

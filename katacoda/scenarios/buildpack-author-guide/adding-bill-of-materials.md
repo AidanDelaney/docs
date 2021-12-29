@@ -35,18 +35,51 @@ Processes:
 
 Apart from the above standard metadata, buildpacks can also populate information about the dependencies they have provided in form of a `Bill-of-Materials`. Let's see how we can use this to populate information about the version of `ruby` that was installed in the output app image.
 
-To add the `ruby` version to the output of `pack inspect-image`, we will have to provide a `Bill-of-Materials` (`BOM`) containing this information. You'll need to update the `launch.toml` created at the end of your `build` script:
+To add the `ruby` version to the output of `pack inspect-image`, we will have to provide a `Bill-of-Materials` (`BOM`) containing this information. There are three "standard" ways to report SBOM data.  You'll need to choose to use on of CycloneDX, SPDX or Syft update the `ruby.sbom.<ext>` (where `<ext>` is the extension appropriate for your BOM standard, one of `cdx.json`, `spdx.json` or `syft.json`) at the end of your `build` script.  Discussion of which BOM format to choose is outside the scope of this tutorial, but we will note that the SBOM format you choose to use is likely to be the output format of any BOM scanner (eg: [`syft cli`](https://github.com/anchore/syft)) you might choose to use.  In this example we will use the CycloneDX json format.
 
 ```bash
 # ...
 
 # Append a Bill-of-Materials containing metadata about the provided ruby version
-cat >> "$layersdir/launch.toml" << EOL
-[[bom]]
-name = "ruby"
-[bom.metadata]
-version = "$ruby_version"
+cat >> "$layersdir/ruby.sbom.cdx.json" << EOL
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.3",
+  "version": 1,
+  "components": [
+    {
+      "type": "library",
+      "name": "ruby",
+      "version": "$ruby_version"
+    }
+  ]
+}
 EOL
+```
+
+We can also add an BOM entry for each dependency listed in `Gemfile.lock`.  Here we use `jq` to add a new record to the `components` array in `bundler.sbom.cdx.json`:
+
+```bash
+cat >> "$rubylayer/bundler.sbom.cdx.json" << EOL
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.3",
+  "version": 1,
+  "components": [
+  ]
+}
+EOL
+if [[ -f Gemfile.lock ]] ; then
+  for gem in $(gem dep -q | grep ^Gem | sed 's/^Gem //')
+  do
+    version=${gem##*-}
+    name=${gem%-${version}}
+    DEP=$(jq --arg name "${name}" --arg version "${version[1]}" \
+      '.components[.components| length] |= . + {"type": "library", "name": $name, "version": $version}' \
+      "$bundlerlayer/bundler.sbom.cdx.json")
+    echo ${DEP} > "$bundlerlayer/bundler.sbom.cdx.json"
+  done
+fi
 ```
 
 Your `ruby-buildpack/bin/build`{{open}} script should look like the following:
@@ -126,13 +159,40 @@ EOL
 
 # ========== ADDED ===========
 # 9. ADD A BOM
-cat >> "$layersdir/launch.toml" << EOL
-[[bom]]
-name = "ruby"
-[bom.metadata]
-version = "$ruby_version"
+cat >> "$rubylayer/ruby.sbom.cdx.json" << EOL
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.3",
+  "version": 1,
+  "components": [
+    {
+      "type": "library",
+      "name": "ruby",
+      "version": "$ruby_version"
+    }
+  ]
+}
 EOL
-
+cat >> "$bundlerlayer/bundler.sbom.cdx.json" << EOL
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.3",
+  "version": 1,
+  "components": [
+  ]
+}
+EOL
+if [[ -f Gemfile.lock ]] ; then
+  for gem in $(gem dep -q | grep ^Gem | sed 's/^Gem //')
+  do
+    version=${gem##*-}
+    name=${gem%-${version}}
+    DEP=$(jq --arg name "${name}" --arg version "${version[1]}" \
+      '.components[.components| length] |= . + {"type": "library", "name": $name, "version": $version}' \
+      "$bundlerlayer/bundler.sbom.cdx.json")
+    echo ${DEP} > "$bundlerlayer/bundler.sbom.cdx.json"
+  done
+fi
 </pre>
 
 Then rebuild your app using the updated buildpack:
@@ -151,19 +211,13 @@ pack inspect-image test-ruby-app --bom
 
 You should find that the included `ruby` version is `2.5.0` as expected.
 
-<!-- test:assert=contains -->
+<!-- test:assert=contains
 ```text
-    {
-      "name": "ruby",
-      "metadata": {
-        "version": "2.5.0"
-      },
-      "buildpacks": {
-        "id": "examples/ruby",
-        "version": "0.0.1"
-      }
-    }
-```
+{
+  "remote": null,
+  "local": null
+}
+```  -->
 
 Congratulations! You’ve created your first configurable Cloud Native Buildpack that uses detection, image layers, and caching to create an introspectable and runnable OCI image.
 
