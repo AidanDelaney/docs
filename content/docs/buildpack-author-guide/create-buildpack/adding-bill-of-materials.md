@@ -77,7 +77,7 @@ if [[ -f Gemfile.lock ]] ; then
   do
     version=${gem##*-}
     name=${gem%-${version}}
-    DEP=$(jq --arg name "${name}" --arg version "${version[1]}" \
+    DEP=$(jq --arg name "${name}" --arg version "${version}" \
       '.components[.components| length] |= . + {"type": "library", "name": $name, "version": $version}' \
       "$bundlerlayer/bundler.sbom.cdx.json")
     echo ${DEP} > "$bundlerlayer/bundler.sbom.cdx.json"
@@ -190,7 +190,7 @@ if [[ -f Gemfile.lock ]] ; then
   do
     version=${gem##*-}
     name=${gem%-${version}}
-    DEP=$(jq --arg name "${name}" --arg version "${version[1]}" \
+    DEP=$(jq --arg name "${name}" --arg version "${version}" \
       '.components[.components| length] |= . + {"type": "library", "name": $name, "version": $version}' \
       "$bundlerlayer/bundler.sbom.cdx.json")
     echo ${DEP} > "$bundlerlayer/bundler.sbom.cdx.json"
